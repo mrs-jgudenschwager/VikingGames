@@ -1,0 +1,1142 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Game Score Tracker</title>
+  <script src="/_sdk/data_sdk.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Dosis:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      box-sizing: border-box;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    .heading-font {
+      font-family: 'Dosis', sans-serif;
+      letter-spacing: 0.5px;
+    }
+    
+    .page-transition {
+      animation: fadeIn 0.4s ease-out;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .score-card {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .score-card:hover {
+      transform: translateY(-4px) scale(1.02);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+    }
+    
+    .nav-button {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      min-height: 60px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    .nav-button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+    }
+    
+    .nav-button:active {
+      transform: scale(0.98);
+    }
+    
+    button, input, select {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    input, select {
+      min-height: 48px;
+      font-size: 16px !important;
+    }
+    
+    @media (max-width: 1024px) {
+      .responsive-grid {
+        grid-template-columns: 1fr !important;
+      }
+      
+      .mobile-padding {
+        padding: 1rem !important;
+      }
+    }
+    
+    .loading-spinner {
+      border: 3px solid #f3f4f6;
+      border-top: 3px solid #3b82f6;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .glass-card {
+      backdrop-filter: blur(16px);
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .gradient-bg {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .input-focus {
+      transition: all 0.2s ease;
+    }
+    
+    .input-focus:focus {
+      transform: scale(1.01);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50">
+  <div id="app" class="h-full w-full overflow-auto"></div>
+  <script>
+    const defaultConfig = {
+      app_title: "Viking Games Robotics Competition",
+      totals_password: "admin123",
+      primary_color: "#10b981",
+      secondary_color: "#ffffff",
+      text_color: "#1f2937",
+      accent_color: "#059669",
+      button_color: "#10b981",
+      font_family: "Dosis",
+      font_size: 18
+    };
+
+    let allScores = [];
+    let currentPage = 'home';
+    let isAuthenticated = false;
+    let isLoading = false;
+
+    const games = [
+      'Block Stack 1', 'Block Stack 2', 'Block Stack 3',
+      'Disc Drop 1', 'Disc Drop 2', 'Disc Drop 3',
+      'Coding 1', 'Coding 2'
+    ];
+
+    const allTeams = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AA', 'BB', 'CC', 'DD', 'EE'];
+
+    const teamToSchool = {
+      'A': 'Central', 'B': 'Cooks Corners', 'C': 'Flint Lake', 'D': 'Heavilin', 
+      'E': 'Memorial', 'F': 'Parkview', 'G': 'Thomas Jefferson', 'H': 'Central',
+      'I': 'Cooks Corners', 'J': 'Flint Lake', 'K': 'Heavilin', 'L': 'Memorial',
+      'M': 'Parkview', 'N': 'Thomas Jefferson', 'O': 'Central', 'P': 'Cooks Corners',
+      'Q': 'Flint Lake', 'R': 'Heavilin', 'S': 'Memorial', 'T': 'Parkview',
+      'U': 'Thomas Jefferson', 'V': 'Central', 'W': 'Cooks Corners', 'X': 'Flint Lake',
+      'Y': 'Heavilin', 'Z': 'Memorial', 'AA': 'Parkview', 'BB': 'Thomas Jefferson',
+      'CC': 'Cooks Corners', 'DD': 'Flint Lake', 'EE': 'Heavilin'
+    };
+
+    const schedule = {
+      'Block Stack 1': [
+        {round: 1, team1: 'A', team2: 'U'}, {round: 2, team1: 'B', team2: 'V'}, {round: 3, team1: 'C', team2: 'W'},
+        {round: 4, team1: 'D', team2: 'X'}, {round: 5, team1: 'E', team2: 'Y'}, {round: 6, team1: 'F', team2: 'Z'},
+        {round: 7, team1: 'G', team2: 'AA'}, {round: 8, team1: 'H', team2: 'BB'}, {round: 9, team1: 'I', team2: 'CC'},
+        {round: 10, team1: 'J', team2: 'DD'}, {round: 11, team1: 'K', team2: 'EE'}, {round: 12, team1: 'L', team2: 'A'},
+        {round: 13, team1: 'M', team2: 'B'}, {round: 14, team1: 'N', team2: 'C'}, {round: 15, team1: 'O', team2: 'D'},
+        {round: 16, team1: 'P', team2: 'E'}, {round: 17, team1: 'Q', team2: 'F'}, {round: 18, team1: 'R', team2: 'G'},
+        {round: 19, team1: 'S', team2: 'H'}, {round: 20, team1: 'T', team2: 'I'}, {round: 21, team1: 'U', team2: 'J'},
+        {round: 22, team1: 'V', team2: 'K'}, {round: 23, team1: 'W', team2: 'L'}, {round: 24, team1: 'X', team2: 'M'},
+        {round: 25, team1: 'Y', team2: 'N'}, {round: 26, team1: 'Z', team2: 'O'}, {round: 27, team1: 'AA', team2: 'P'},
+        {round: 28, team1: 'BB', team2: 'Q'}, {round: 29, team1: 'CC', team2: 'R'}, {round: 30, team1: 'DD', team2: 'S'},
+        {round: 31, team1: 'EE', team2: 'T'}
+      ],
+      'Block Stack 2': [
+        {round: 1, team1: 'Z', team2: 'L'}, {round: 2, team1: 'AA', team2: 'M'}, {round: 3, team1: 'BB', team2: 'N'},
+        {round: 4, team1: 'CC', team2: 'O'}, {round: 5, team1: 'DD', team2: 'P'}, {round: 6, team1: 'EE', team2: 'Q'},
+        {round: 7, team1: 'A', team2: 'R'}, {round: 8, team1: 'B', team2: 'S'}, {round: 9, team1: 'C', team2: 'T'},
+        {round: 10, team1: 'D', team2: 'U'}, {round: 11, team1: 'E', team2: 'V'}, {round: 12, team1: 'F', team2: 'W'},
+        {round: 13, team1: 'G', team2: 'X'}, {round: 14, team1: 'H', team2: 'Y'}, {round: 15, team1: 'I', team2: 'Z'},
+        {round: 16, team1: 'J', team2: 'AA'}, {round: 17, team1: 'K', team2: 'BB'}, {round: 18, team1: 'L', team2: 'CC'},
+        {round: 19, team1: 'M', team2: 'DD'}, {round: 20, team1: 'N', team2: 'EE'}, {round: 21, team1: 'O', team2: 'A'},
+        {round: 22, team1: 'P', team2: 'B'}, {round: 23, team1: 'Q', team2: 'C'}, {round: 24, team1: 'R', team2: 'D'},
+        {round: 25, team1: 'S', team2: 'E'}, {round: 26, team1: 'T', team2: 'F'}, {round: 27, team1: 'U', team2: 'G'},
+        {round: 28, team1: 'V', team2: 'H'}, {round: 29, team1: 'W', team2: 'I'}, {round: 30, team1: 'X', team2: 'J'},
+        {round: 31, team1: 'Y', team2: 'K'}
+      ],
+      'Block Stack 3': [
+        {round: 1, team1: 'H', team2: 'C'}, {round: 2, team1: 'I', team2: 'D'}, {round: 3, team1: 'J', team2: 'E'},
+        {round: 4, team1: 'K', team2: 'F'}, {round: 5, team1: 'L', team2: 'G'}, {round: 6, team1: 'M', team2: 'H'},
+        {round: 7, team1: 'N', team2: 'I'}, {round: 8, team1: 'O', team2: 'J'}, {round: 9, team1: 'P', team2: 'K'},
+        {round: 10, team1: 'Q', team2: 'L'}, {round: 11, team1: 'R', team2: 'M'}, {round: 12, team1: 'S', team2: 'N'},
+        {round: 13, team1: 'T', team2: 'O'}, {round: 14, team1: 'U', team2: 'P'}, {round: 15, team1: 'V', team2: 'Q'},
+        {round: 16, team1: 'W', team2: 'R'}, {round: 17, team1: 'X', team2: 'S'}, {round: 18, team1: 'Y', team2: 'T'},
+        {round: 19, team1: 'Z', team2: 'U'}, {round: 20, team1: 'AA', team2: 'V'}, {round: 21, team1: 'BB', team2: 'W'},
+        {round: 22, team1: 'CC', team2: 'X'}, {round: 23, team1: 'DD', team2: 'Y'}, {round: 24, team1: 'EE', team2: 'Z'},
+        {round: 25, team1: 'A', team2: 'AA'}, {round: 26, team1: 'B', team2: 'BB'}, {round: 27, team1: 'C', team2: 'CC'},
+        {round: 28, team1: 'D', team2: 'DD'}, {round: 29, team1: 'E', team2: 'EE'}, {round: 30, team1: 'F', team2: 'A'},
+        {round: 31, team1: 'G', team2: 'B'}
+      ],
+      'Disc Drop 1': [
+        {round: 1, team1: 'DD', team2: 'T'}, {round: 2, team1: 'EE', team2: 'U'}, {round: 3, team1: 'A', team2: 'V'},
+        {round: 4, team1: 'B', team2: 'W'}, {round: 5, team1: 'C', team2: 'X'}, {round: 6, team1: 'D', team2: 'Y'},
+        {round: 7, team1: 'E', team2: 'Z'}, {round: 8, team1: 'F', team2: 'AA'}, {round: 9, team1: 'G', team2: 'BB'},
+        {round: 10, team1: 'H', team2: 'CC'}, {round: 11, team1: 'I', team2: 'DD'}, {round: 12, team1: 'J', team2: 'EE'},
+        {round: 13, team1: 'K', team2: 'A'}, {round: 14, team1: 'L', team2: 'B'}, {round: 15, team1: 'M', team2: 'C'},
+        {round: 16, team1: 'N', team2: 'D'}, {round: 17, team1: 'O', team2: 'E'}, {round: 18, team1: 'P', team2: 'F'},
+        {round: 19, team1: 'Q', team2: 'G'}, {round: 20, team1: 'R', team2: 'H'}, {round: 21, team1: 'S', team2: 'I'},
+        {round: 22, team1: 'T', team2: 'J'}, {round: 23, team1: 'U', team2: 'K'}, {round: 24, team1: 'V', team2: 'L'},
+        {round: 25, team1: 'W', team2: 'M'}, {round: 26, team1: 'X', team2: 'N'}, {round: 27, team1: 'Y', team2: 'O'},
+        {round: 28, team1: 'Z', team2: 'P'}, {round: 29, team1: 'AA', team2: 'Q'}, {round: 30, team1: 'BB', team2: 'R'},
+        {round: 31, team1: 'CC', team2: 'S'}
+      ],
+      'Disc Drop 2': [
+        {round: 1, team1: 'X', team2: 'R'}, {round: 2, team1: 'Y', team2: 'S'}, {round: 3, team1: 'Z', team2: 'T'},
+        {round: 4, team1: 'AA', team2: 'U'}, {round: 5, team1: 'BB', team2: 'V'}, {round: 6, team1: 'CC', team2: 'W'},
+        {round: 7, team1: 'DD', team2: 'X'}, {round: 8, team1: 'EE', team2: 'Y'}, {round: 9, team1: 'A', team2: 'Z'},
+        {round: 10, team1: 'B', team2: 'AA'}, {round: 11, team1: 'C', team2: 'BB'}, {round: 12, team1: 'D', team2: 'CC'},
+        {round: 13, team1: 'E', team2: 'DD'}, {round: 14, team1: 'F', team2: 'EE'}, {round: 15, team1: 'G', team2: 'A'},
+        {round: 16, team1: 'H', team2: 'B'}, {round: 17, team1: 'I', team2: 'C'}, {round: 18, team1: 'J', team2: 'D'},
+        {round: 19, team1: 'K', team2: 'E'}, {round: 20, team1: 'L', team2: 'F'}, {round: 21, team1: 'M', team2: 'G'},
+        {round: 22, team1: 'N', team2: 'H'}, {round: 23, team1: 'O', team2: 'I'}, {round: 24, team1: 'P', team2: 'J'},
+        {round: 25, team1: 'Q', team2: 'K'}, {round: 26, team1: 'R', team2: 'L'}, {round: 27, team1: 'S', team2: 'M'},
+        {round: 28, team1: 'T', team2: 'N'}, {round: 29, team1: 'U', team2: 'O'}, {round: 30, team1: 'V', team2: 'P'},
+        {round: 31, team1: 'W', team2: 'Q'}
+      ],
+      'Disc Drop 3': [
+        {round: 1, team1: 'BB', team2: 'P'}, {round: 2, team1: 'CC', team2: 'Q'}, {round: 3, team1: 'DD', team2: 'R'},
+        {round: 4, team1: 'EE', team2: 'S'}, {round: 5, team1: 'A', team2: 'T'}, {round: 6, team1: 'B', team2: 'U'},
+        {round: 7, team1: 'C', team2: 'V'}, {round: 8, team1: 'D', team2: 'W'}, {round: 9, team1: 'E', team2: 'X'},
+        {round: 10, team1: 'F', team2: 'Y'}, {round: 11, team1: 'G', team2: 'Z'}, {round: 12, team1: 'H', team2: 'AA'},
+        {round: 13, team1: 'I', team2: 'BB'}, {round: 14, team1: 'J', team2: 'CC'}, {round: 15, team1: 'K', team2: 'DD'},
+        {round: 16, team1: 'L', team2: 'EE'}, {round: 17, team1: 'M', team2: 'A'}, {round: 18, team1: 'N', team2: 'B'},
+        {round: 19, team1: 'O', team2: 'C'}, {round: 20, team1: 'P', team2: 'D'}, {round: 21, team1: 'Q', team2: 'E'},
+        {round: 22, team1: 'R', team2: 'F'}, {round: 23, team1: 'S', team2: 'G'}, {round: 24, team1: 'T', team2: 'H'},
+        {round: 25, team1: 'U', team2: 'I'}, {round: 26, team1: 'V', team2: 'J'}, {round: 27, team1: 'W', team2: 'K'},
+        {round: 28, team1: 'X', team2: 'L'}, {round: 29, team1: 'Y', team2: 'M'}, {round: 30, team1: 'Z', team2: 'N'},
+        {round: 31, team1: 'AA', team2: 'O'}
+      ],
+      'Coding 1': [
+        {round: 1, team1: 'V'}, {round: 2, team1: 'W'}, {round: 3, team1: 'X'},
+        {round: 4, team1: 'Y'}, {round: 5, team1: 'Z'}, {round: 6, team1: 'AA'},
+        {round: 7, team1: 'BB'}, {round: 8, team1: 'CC'}, {round: 9, team1: 'DD'},
+        {round: 10, team1: 'EE'}, {round: 11, team1: 'A'}, {round: 12, team1: 'B'},
+        {round: 13, team1: 'C'}, {round: 14, team1: 'D'}, {round: 15, team1: 'E'},
+        {round: 16, team1: 'F'}, {round: 17, team1: 'G'}, {round: 18, team1: 'H'},
+        {round: 19, team1: 'I'}, {round: 20, team1: 'J'}, {round: 21, team1: 'K'},
+        {round: 22, team1: 'L'}, {round: 23, team1: 'M'}, {round: 24, team1: 'N'},
+        {round: 25, team1: 'O'}, {round: 26, team1: 'P'}, {round: 27, team1: 'Q'},
+        {round: 28, team1: 'R'}, {round: 29, team1: 'S'}, {round: 30, team1: 'T'},
+        {round: 31, team1: 'U'}
+      ],
+      'Coding 2': [
+        {round: 1, team1: 'J'}, {round: 2, team1: 'K'}, {round: 3, team1: 'L'},
+        {round: 4, team1: 'M'}, {round: 5, team1: 'N'}, {round: 6, team1: 'O'},
+        {round: 7, team1: 'P'}, {round: 8, team1: 'Q'}, {round: 9, team1: 'R'},
+        {round: 10, team1: 'S'}, {round: 11, team1: 'T'}, {round: 12, team1: 'U'},
+        {round: 13, team1: 'V'}, {round: 14, team1: 'W'}, {round: 15, team1: 'X'},
+        {round: 16, team1: 'Y'}, {round: 17, team1: 'Z'}, {round: 18, team1: 'AA'},
+        {round: 19, team1: 'BB'}, {round: 20, team1: 'CC'}, {round: 21, team1: 'DD'},
+        {round: 22, team1: 'EE'}, {round: 23, team1: 'A'}, {round: 24, team1: 'B'},
+        {round: 25, team1: 'C'}, {round: 26, team1: 'D'}, {round: 27, team1: 'E'},
+        {round: 28, team1: 'F'}, {round: 29, team1: 'G'}, {round: 30, team1: 'H'},
+        {round: 31, team1: 'I'}
+      ]
+    };
+
+    const dataHandler = {
+      onDataChanged(data) {
+        allScores = data;
+        renderCurrentPage();
+      }
+    };
+
+    async function initApp() {
+      const result = await window.dataSdk.init(dataHandler);
+      if (!result.isOk) {
+        console.error("Failed to initialize data SDK");
+        return;
+      }
+      renderCurrentPage();
+    }
+
+    function renderCurrentPage() {
+      const app = document.getElementById('app');
+      const config = window.elementSdk?.config || defaultConfig;
+      
+      if (currentPage === 'home') {
+        app.innerHTML = renderHomePage(config);
+      } else if (currentPage === 'totals') {
+        app.innerHTML = renderTotalsPage(config);
+      } else {
+        app.innerHTML = renderGamePage(currentPage, config);
+      }
+      
+      attachEventListeners();
+    }
+
+    function renderScoresList(scores, config, baseSize, gameFilter = 'all', teamFilter = 'all') {
+      let filteredScores = scores;
+      
+      if (gameFilter !== 'all') {
+        filteredScores = filteredScores.filter(s => s.game_name === gameFilter);
+      }
+      
+      if (teamFilter !== 'all') {
+        filteredScores = filteredScores.filter(s => s.team_name === teamFilter);
+      }
+      
+      if (filteredScores.length === 0) {
+        return `<p class="text-center text-gray-500" style="font-size: ${baseSize * 0.9}px; padding: 20px;">No scores found</p>`;
+      }
+      
+      return filteredScores.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map(score => `
+        <div class="p-3 rounded-lg border-2 score-item" data-id="${score.__backendId}" style="border-color: ${config.primary_color || defaultConfig.primary_color}20; background: ${config.secondary_color || defaultConfig.secondary_color};">
+          <div class="flex justify-between items-center">
+            <div style="flex: 1;">
+              <p class="font-semibold" style="font-size: ${baseSize * 0.95}px; color: ${config.text_color || defaultConfig.text_color};">
+                ${score.game_name} - Round ${score.round_number}
+              </p>
+              <p style="font-size: ${baseSize * 0.85}px; color: #6b7280;">
+                Team ${score.team_name}
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="number" class="score-edit-input w-24 p-3 rounded border-2 text-center font-bold" data-id="${score.__backendId}" value="${score.score}" min="0" style="font-size: ${baseSize}px; border-color: ${config.primary_color || defaultConfig.primary_color}; min-height: 48px;">
+              <button onclick="updateScore('${score.__backendId}')" class="px-4 py-3 rounded font-medium" style="background: ${config.button_color || defaultConfig.button_color}; color: white; font-size: ${baseSize * 0.9}px; min-height: 48px;">
+                Save
+              </button>
+              <button onclick="confirmDeleteScore('${score.__backendId}')" class="px-4 py-3 rounded font-medium" style="background: #ef4444; color: white; font-size: ${baseSize * 0.9}px; min-height: 48px;">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderHomePage(config) {
+      const baseSize = config.font_size || defaultConfig.font_size;
+      const fontFamily = config.font_family || defaultConfig.font_family;
+      const titleText = config.app_title || defaultConfig.app_title;
+      
+      return `
+        <div class="h-full w-full p-8 page-transition" style="font-family: ${fontFamily}, -apple-system, sans-serif;">
+          <div class="max-w-6xl mx-auto">
+            <header class="mb-12">
+              <div class="flex items-center justify-center gap-6 mb-4">
+                <img src="https://i.imgur.com/vt3QgQB.png" alt="Viking Games Logo" loading="lazy" onerror="console.error('Image failed to load:', this.src); this.style.background='#e5e7eb'; this.alt='Image unavailable';" style="max-width: 140px; width: 100%; height: auto;">
+                <h1 class="font-bold" style="font-size: ${baseSize * 2.8}px; color: ${config.text_color || defaultConfig.text_color}; font-family: ${fontFamily}, sans-serif;">
+                  ${titleText}
+                </h1>
+              </div>
+              <p class="text-gray-600 text-center" style="font-size: ${baseSize * 1.1}px;">
+                Select an event to enter scores
+              </p>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 responsive-grid">
+              ${games.map(game => `
+                <button onclick="navigateToGame('${game}')" class="score-card p-8 rounded-xl shadow-md nav-button" style="background: ${config.secondary_color || defaultConfig.secondary_color}; border: 2px solid ${config.primary_color || defaultConfig.primary_color};">
+                  <h3 class="font-semibold" style="font-size: ${baseSize * 1.8}px; color: ${config.text_color || defaultConfig.text_color};">
+                    ${game}
+                  </h3>
+                </button>
+              `).join('')}
+            </div>
+
+            <div class="text-center">
+              <button onclick="navigateToTotals()" class="px-10 py-5 rounded-lg font-semibold nav-button shadow-lg" style="background: ${config.accent_color || defaultConfig.accent_color}; color: white; font-size: ${baseSize * 1.2}px; min-height: 60px;">
+                View Totals (Admin Only)
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderGamePage(gameName, config) {
+      const baseSize = config.font_size || defaultConfig.font_size;
+      const fontFamily = config.font_family || defaultConfig.font_family;
+      const gameSchedule = schedule[gameName] || [];
+      const gameScores = allScores.filter(s => s.game_name === gameName);
+      
+      const completedRounds = new Set(gameScores.map(s => s.round_number));
+      const availableRounds = gameSchedule.filter(r => !completedRounds.has(r.round));
+      
+      return `
+        <div class="h-full w-full p-4 md:p-8 page-transition mobile-padding" style="font-family: ${fontFamily}, -apple-system, sans-serif;">
+          <div class="max-w-6xl mx-auto">
+            <button onclick="navigateToHome()" class="mb-6 px-5 py-3 rounded-lg font-medium" style="background: ${config.secondary_color || defaultConfig.secondary_color}; color: ${config.text_color || defaultConfig.text_color}; border: 1px solid ${config.primary_color || defaultConfig.primary_color}; font-size: ${baseSize}px; min-height: 48px;">
+              ← Back to Games
+            </button>
+
+            <h2 class="font-bold mb-8" style="font-size: ${baseSize * 2}px; color: ${config.text_color || defaultConfig.text_color}; font-family: ${fontFamily}, sans-serif;">
+              ${gameName}
+            </h2>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mb-8 responsive-grid">
+              <div class="p-6 rounded-xl shadow-lg" style="background: ${config.secondary_color || defaultConfig.secondary_color};">
+                <form id="scoreForm" class="space-y-4">
+                  ${availableRounds.length === 0 ? `
+                    <div class="p-6 rounded-lg text-center" style="background: ${config.accent_color || defaultConfig.accent_color}15;">
+                      <p class="font-semibold text-lg" style="color: ${config.accent_color || defaultConfig.accent_color}; font-size: ${baseSize * 1.2}px;">
+                        All rounds complete!
+                      </p>
+                      <p class="mt-2" style="color: ${config.text_color || defaultConfig.text_color}; font-size: ${baseSize * 0.95}px;">
+                        All scores have been entered for this game.
+                      </p>
+                    </div>
+                  ` : `
+                  <div>
+                    <select id="round-select" class="w-full p-3 rounded-lg border-2" style="font-size: ${baseSize}px; border-color: ${config.primary_color || defaultConfig.primary_color};">
+                      ${availableRounds.map(r => `<option value="${r.round}">Round ${r.round}</option>`).join('')}
+                    </select>
+                  </div>
+
+                  <div id="teams-display" class="p-4 rounded-lg text-center" style="background: ${config.primary_color || defaultConfig.primary_color}15;">
+                    <p class="font-medium mb-2" style="font-size: ${baseSize * 0.9}px; color: ${config.text_color || defaultConfig.text_color};">
+                      ${gameName.startsWith('Coding') ? 'Team:' : 'Alliance Teams:'}
+                    </p>
+                    <p id="alliance-teams" class="font-bold" style="font-size: ${baseSize * 1.6}px; color: ${config.accent_color || defaultConfig.accent_color};">
+                    </p>
+                  </div>
+
+                  ${gameName.startsWith('Block Stack') ? `
+                  <div class="p-5 rounded-lg border-2" style="border-color: ${config.primary_color || defaultConfig.primary_color}; background: linear-gradient(135deg, rgba(124,92,255,0.05), rgba(56,189,248,0.05));">
+                    <p class="font-bold mb-4 text-center" style="font-size: ${baseSize * 1.3}px; color: ${config.text_color || defaultConfig.text_color};">
+                      Block Stack Calculator
+                    </p>
+                    <div class="space-y-3">
+                      <div>
+                        <label class="block mb-2 font-semibold" style="font-size: ${baseSize * 1.05}px; color: ${config.text_color || defaultConfig.text_color};">Base Blocks (×2)</label>
+                        <input type="number" id="calc-base" min="0" value="0" class="w-full p-4 rounded-lg border-none text-center font-bold" style="font-size: ${baseSize * 1.4}px; background: linear-gradient(135deg, #cce6ff, #99d6ff); min-height: 56px;">
+                      </div>
+                      <div>
+                        <label class="block mb-2 font-semibold" style="font-size: ${baseSize * 1.05}px; color: ${config.text_color || defaultConfig.text_color};">2nd Tier Blocks (×5)</label>
+                        <input type="number" id="calc-tier2" min="0" value="0" class="w-full p-4 rounded-lg border-none text-center font-bold" style="font-size: ${baseSize * 1.4}px; background: linear-gradient(135deg, #c8e6c9, #a8d5a3); min-height: 56px;">
+                      </div>
+                      <div>
+                        <label class="block mb-2 font-semibold" style="font-size: ${baseSize * 1.05}px; color: ${config.text_color || defaultConfig.text_color};">3rd Tier Blocks (×10)</label>
+                        <input type="number" id="calc-tier3" min="0" value="0" class="w-full p-4 rounded-lg border-none text-center font-bold" style="font-size: ${baseSize * 1.4}px; background: linear-gradient(135deg, #fff9c4, #fff176); min-height: 56px;">
+                      </div>
+                      <div class="pt-3 border-t-2 flex items-center justify-between" style="border-color: ${config.primary_color || defaultConfig.primary_color};">
+                        <span class="font-bold" style="font-size: ${baseSize * 1.15}px; color: ${config.text_color || defaultConfig.text_color};">Total Score:</span>
+                        <span id="calc-result" class="font-bold" style="font-size: ${baseSize * 2.2}px; color: ${config.accent_color || defaultConfig.accent_color};">0</span>
+                      </div>
+                      <button type="button" id="use-calc-btn" class="w-full py-4 rounded-lg font-bold mt-2" style="background: ${config.accent_color || defaultConfig.accent_color}; color: white; font-size: ${baseSize * 1.2}px; min-height: 56px;">
+                        Use This Score ↓
+                      </button>
+                    </div>
+                  </div>
+                  ` : ''}
+
+                  ${gameName.startsWith('Disc Drop') ? `
+                  <div class="p-5 rounded-lg border-2" style="border-color: ${config.primary_color || defaultConfig.primary_color}; background: linear-gradient(135deg, rgba(124,92,255,0.05), rgba(56,189,248,0.05));">
+                    <p class="font-bold mb-4 text-center" style="font-size: ${baseSize * 1.3}px; color: ${config.text_color || defaultConfig.text_color};">
+                      Disc Drop Calculator
+                    </p>
+                    <div class="space-y-3">
+                      <div>
+                        <label class="block mb-2 font-semibold" style="font-size: ${baseSize * 1.05}px; color: ${config.text_color || defaultConfig.text_color};">Blue Zone (×2)</label>
+                        <input type="number" id="calc-blue" min="0" max="15" value="0" class="w-full p-4 rounded-lg border-none text-center font-bold" style="font-size: ${baseSize * 1.4}px; background: linear-gradient(135deg, #bfdbfe, #93c5fd); min-height: 56px;">
+                      </div>
+                      <div>
+                        <label class="block mb-2 font-semibold" style="font-size: ${baseSize * 1.05}px; color: ${config.text_color || defaultConfig.text_color};">Purple Zone (×4)</label>
+                        <input type="number" id="calc-purple" min="0" max="15" value="0" class="w-full p-4 rounded-lg border-none text-center font-bold" style="font-size: ${baseSize * 1.4}px; background: linear-gradient(135deg, #e9d5ff, #d8b4fe); min-height: 56px;">
+                      </div>
+                      <div>
+                        <label class="block mb-2 font-semibold" style="font-size: ${baseSize * 1.05}px; color: ${config.text_color || defaultConfig.text_color};">Yellow Zone (×3)</label>
+                        <input type="number" id="calc-yellow" min="0" max="15" value="0" class="w-full p-4 rounded-lg border-none text-center font-bold" style="font-size: ${baseSize * 1.4}px; background: linear-gradient(135deg, #fef9c3, #fef08a); min-height: 56px;">
+                      </div>
+                      <div>
+                        <label class="block mb-2 font-semibold" style="font-size: ${baseSize * 1.05}px; color: ${config.text_color || defaultConfig.text_color};">No Color Zone (×1)</label>
+                        <input type="number" id="calc-nocolor" min="0" max="15" value="0" class="w-full p-4 rounded-lg border-none text-center font-bold" style="font-size: ${baseSize * 1.4}px; background: linear-gradient(135deg, #f3f4f6, #d1d5db); min-height: 56px;">
+                      </div>
+                      <div class="pt-3 border-t-2 flex items-center justify-between" style="border-color: ${config.primary_color || defaultConfig.primary_color};">
+                        <span class="font-bold" style="font-size: ${baseSize * 1.15}px; color: ${config.text_color || defaultConfig.text_color};">Total Score:</span>
+                        <span id="calc-result" class="font-bold" style="font-size: ${baseSize * 2.2}px; color: ${config.accent_color || defaultConfig.accent_color};">0</span>
+                      </div>
+                      <button type="button" id="use-calc-btn" class="w-full py-4 rounded-lg font-bold mt-2" style="background: ${config.accent_color || defaultConfig.accent_color}; color: white; font-size: ${baseSize * 1.2}px; min-height: 56px;">
+                        Use This Score ↓
+                      </button>
+                    </div>
+                  </div>
+                  ` : ''}
+
+                  <div>
+                    <label class="block mb-2 font-medium" for="score-input" style="font-size: ${baseSize}px; color: ${config.text_color || defaultConfig.text_color};">
+                      ${gameName.startsWith('Coding') ? 'Team Score' : 'Alliance Score (applied to both teams)'}
+                    </label>
+                    <input type="number" id="score-input" min="0" class="w-full p-4 rounded-lg border-2" style="font-size: ${baseSize * 1.6}px; border-color: ${config.primary_color || defaultConfig.primary_color}; min-height: 56px;" placeholder="Enter score">
+                  </div>
+
+                  <button type="submit" id="submit-btn" class="w-full py-4 rounded-lg font-semibold shadow-md" style="background: ${config.button_color || defaultConfig.button_color}; color: white; font-size: ${baseSize * 1.2}px; min-height: 56px;">
+                    ${gameName.startsWith('Coding') ? 'Add Score' : 'Add Score to Both Teams'}
+                  </button>
+                  `}
+                </form>
+              </div>
+
+              <div class="p-6 rounded-xl shadow-lg" style="background: ${config.secondary_color || defaultConfig.secondary_color};">
+                <h3 class="font-semibold mb-6" style="font-size: ${baseSize * 1.5}px; color: ${config.text_color || defaultConfig.text_color};">
+                  School Rankings
+                </h3>
+                <div class="space-y-4">
+                  ${schoolAverages.map((item, index) => `
+                    <div class="p-4 rounded-lg" style="background: linear-gradient(135deg, ${config.primary_color || defaultConfig.primary_color}15, ${config.accent_color || defaultConfig.accent_color}15); ${index === 0 ? 'border: 3px solid #fbbf24;' : ''}">
+                      <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                          <span class="font-bold" style="font-size: ${baseSize * 1.5}px; color: ${index === 0 ? '#fbbf24' : config.accent_color || defaultConfig.accent_color};">
+                            ${index === 0 ? '👑' : `#${index + 1}`}
+                          </span>
+                          <div>
+                            <p class="font-semibold" style="font-size: ${baseSize * 1.1}px; color: ${config.text_color || defaultConfig.text_color};">
+                              ${item.school} ${index === 0 ? '🏆' : ''}
+                            </p>
+                            <p class="text-gray-500" style="font-size: ${baseSize * 0.75}px;">
+                              ${item.count} scores | ${item.total} pts
+                            </p>
+                          </div>
+                        </div>
+                        <div class="text-right">
+                          <span class="font-bold" style="font-size: ${baseSize * 1.8}px; color: ${config.primary_color || defaultConfig.primary_color};">
+                            ${item.average}
+                          </span>
+                          <p class="text-gray-500" style="font-size: ${baseSize * 0.7}px;">
+                            avg
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-8">
+              <div class="p-6 rounded-xl shadow-lg" style="background: ${config.secondary_color || defaultConfig.secondary_color};">
+                <h3 class="font-semibold mb-4" style="font-size: ${baseSize * 1.3}px; color: ${config.text_color || defaultConfig.text_color};">
+                  Schedule
+                </h3>
+                <div class="space-y-2 overflow-y-auto" style="max-height: 400px;">
+                  ${gameSchedule.map(r => {
+                    const isComplete = completedRounds.has(r.round);
+                    const roundScore = gameScores.find(s => s.round_number === r.round);
+                    return `
+                    <div class="p-3 rounded-lg text-sm flex justify-between items-center" style="background: ${isComplete ? '#f3f4f6' : '#ffffff'}; border: 2px solid ${isComplete ? '#d1d5db' : config.primary_color || defaultConfig.primary_color}; font-size: ${baseSize * 0.9}px;">
+                      <div>
+                        <span class="font-semibold" style="color: ${isComplete ? '#9ca3af' : config.text_color || defaultConfig.text_color};">Round ${r.round}:</span>
+                        <span class="font-bold" style="color: ${isComplete ? '#9ca3af' : config.accent_color || defaultConfig.accent_color};"> ${r.team1}</span>${r.team2 ? ` + <span class="font-bold" style="color: ${isComplete ? '#9ca3af' : config.accent_color || defaultConfig.accent_color};">${r.team2}</span>` : ''}
+                      </div>
+                      ${isComplete && roundScore ? `<span class="font-bold" style="color: #10b981;">${roundScore.score}</span>` : ''}
+                    </div>
+                  `;
+                  }).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTotalsPage(config) {
+      const baseSize = config.font_size || defaultConfig.font_size;
+      const fontFamily = config.font_family || defaultConfig.font_family;
+      
+      if (!isAuthenticated) {
+        return `
+          <div class="h-full w-full flex items-center justify-center p-8" style="font-family: ${fontFamily}, -apple-system, sans-serif;">
+            <div class="max-w-md w-full p-8 rounded-xl shadow-xl" style="background: ${config.secondary_color || defaultConfig.secondary_color};">
+              <h2 class="font-bold mb-6 text-center" style="font-size: ${baseSize * 1.8}px; color: ${config.text_color || defaultConfig.text_color}; font-family: ${fontFamily}, sans-serif;">
+                Admin Access Required
+              </h2>
+              
+              <form id="authForm" class="space-y-4">
+                <div>
+                  <label class="block mb-2 font-medium" for="password-input" style="font-size: ${baseSize}px; color: ${config.text_color || defaultConfig.text_color};">
+                    Password
+                  </label>
+                  <input type="password" id="password-input" class="w-full p-3 rounded-lg border-2" style="font-size: ${baseSize}px; border-color: ${config.primary_color || defaultConfig.primary_color};" placeholder="Enter password">
+                </div>
+
+                <button type="submit" class="w-full py-3 rounded-lg font-semibold" style="background: ${config.button_color || defaultConfig.button_color}; color: white; font-size: ${baseSize * 1.1}px;">
+                  Access Totals
+                </button>
+              </form>
+
+              <button onclick="navigateToHome()" class="w-full mt-4 py-2 rounded-lg" style="color: ${config.text_color || defaultConfig.text_color}; font-size: ${baseSize * 0.95}px;">
+                ← Back to Home
+              </button>
+
+              <div id="auth-error" class="mt-4 hidden p-3 rounded-lg" style="background: #fee2e2; color: #991b1b; font-size: ${baseSize * 0.9}px;"></div>
+            </div>
+          </div>
+        `;
+      }
+
+      const teamTotals = allTeams.map(team => {
+        const teamScores = allScores.filter(s => s.team_name === team);
+        const total = teamScores.reduce((sum, s) => sum + s.score, 0);
+        return { team, total, count: teamScores.length };
+      }).sort((a, b) => b.total - a.total);
+
+      const gameTotals = games.map(game => {
+        const gameScores = allScores.filter(s => s.game_name === game);
+        const total = gameScores.reduce((sum, s) => sum + s.score, 0);
+        return { game, total, count: gameScores.length };
+      });
+
+      const schools = ['Central', 'Cooks Corners', 'Flint Lake', 'Heavilin', 'Memorial', 'Parkview', 'Thomas Jefferson'];
+      const schoolAverages = schools.map(school => {
+        const schoolTeams = Object.keys(teamToSchool).filter(team => teamToSchool[team] === school);
+        const schoolScores = allScores.filter(s => schoolTeams.includes(s.team_name));
+        const total = schoolScores.reduce((sum, s) => sum + s.score, 0);
+        const average = schoolScores.length > 0 ? Math.round(total / schoolScores.length) : 0;
+        return { school, average, total, count: schoolScores.length };
+      }).sort((a, b) => b.average - a.average);
+
+      return `
+        <div class="h-full w-full p-4 md:p-8 page-transition mobile-padding" style="font-family: ${fontFamily}, -apple-system, sans-serif;">
+          <div class="max-w-6xl mx-auto">
+            <div class="flex justify-between items-center mb-8 gap-4 flex-wrap">
+              <h2 class="font-bold" style="font-size: ${baseSize * 2}px; color: ${config.text_color || defaultConfig.text_color}; font-family: ${fontFamily}, sans-serif;">
+                Score Totals
+              </h2>
+              <div class="flex gap-3">
+                <button onclick="confirmReset()" class="px-5 py-3 rounded-lg font-medium" style="background: #f59e0b; color: white; font-size: ${baseSize}px; min-height: 48px;">
+                  Reset All Scores
+                </button>
+                <button onclick="logout()" class="px-5 py-3 rounded-lg" style="background: #ef4444; color: white; font-size: ${baseSize}px; min-height: 48px;">
+                  Logout
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mb-8 responsive-grid">
+              <div class="p-6 rounded-xl shadow-lg" style="background: ${config.secondary_color || defaultConfig.secondary_color};">
+                <h3 class="font-semibold mb-6" style="font-size: ${baseSize * 1.5}px; color: ${config.text_color || defaultConfig.text_color};">
+                  Team Rankings
+                </h3>
+                <div class="space-y-4">
+                  ${teamTotals.map((item, index) => `
+                    <div class="p-4 rounded-lg" style="background: linear-gradient(135deg, ${config.primary_color || defaultConfig.primary_color}15, ${config.accent_color || defaultConfig.accent_color}15);">
+                      <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                          <span class="font-bold" style="font-size: ${baseSize * 1.5}px; color: ${config.accent_color || defaultConfig.accent_color};">
+                            #${index + 1}
+                          </span>
+                          <div>
+                            <p class="font-semibold" style="font-size: ${baseSize * 1.1}px; color: ${config.text_color || defaultConfig.text_color};">
+                              Team ${item.team}
+                            </p>
+                            <p class="text-gray-500" style="font-size: ${baseSize * 0.85}px;">
+                              ${teamToSchool[item.team]} | ${item.count} scores
+                            </p>
+                          </div>
+                        </div>
+                        <span class="font-bold" style="font-size: ${baseSize * 1.8}px; color: ${config.primary_color || defaultConfig.primary_color};">
+                          ${item.total}
+                        </span>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+
+              <div class="p-6 rounded-xl shadow-lg" style="background: ${config.secondary_color || defaultConfig.secondary_color};">
+                <h3 class="font-semibold mb-6" style="font-size: ${baseSize * 1.5}px; color: ${config.text_color || defaultConfig.text_color};">
+                  School Rankings
+                </h3>
+                <div class="space-y-4">
+                  ${schoolAverages.map((item, index) => `
+                    <div class="p-4 rounded-lg" style="background: linear-gradient(135deg, ${config.primary_color || defaultConfig.primary_color}15, ${config.accent_color || defaultConfig.accent_color}15); ${index === 0 ? 'border: 3px solid #fbbf24;' : ''}">
+                      <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                          <span class="font-bold" style="font-size: ${baseSize * 1.5}px; color: ${index === 0 ? '#fbbf24' : config.accent_color || defaultConfig.accent_color};">
+                            ${index === 0 ? '👑' : `#${index + 1}`}
+                          </span>
+                          <div>
+                            <p class="font-semibold" style="font-size: ${baseSize * 1.1}px; color: ${config.text_color || defaultConfig.text_color};">
+                              ${item.school} ${index === 0 ? '🏆' : ''}
+                            </p>
+                            <p class="text-gray-500" style="font-size: ${baseSize * 0.75}px;">
+                              ${item.count} scores | ${item.total} pts
+                            </p>
+                          </div>
+                        </div>
+                        <div class="text-right">
+                          <span class="font-bold" style="font-size: ${baseSize * 1.8}px; color: ${config.primary_color || defaultConfig.primary_color};">
+                            ${item.average}
+                          </span>
+                          <p class="text-gray-500" style="font-size: ${baseSize * 0.7}px;">
+                            avg
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-8">
+              <div class="p-6 rounded-xl shadow-lg" style="background: ${config.secondary_color || defaultConfig.secondary_color};">
+                <h3 class="font-semibold mb-6" style="font-size: ${baseSize * 1.5}px; color: ${config.text_color || defaultConfig.text_color};">
+                  Edit Scores
+                </h3>
+                <div class="space-y-4 mb-4">
+                  <div>
+                    <label class="block mb-2 font-medium" for="filter-game" style="font-size: ${baseSize * 0.95}px; color: ${config.text_color || defaultConfig.text_color};">
+                      Filter by Game
+                    </label>
+                    <select id="filter-game" class="w-full p-3 rounded-lg border-2" style="font-size: ${baseSize * 0.9}px; border-color: ${config.primary_color || defaultConfig.primary_color};">
+                      <option value="all">All Games</option>
+                      ${games.map(game => `<option value="${game}">${game}</option>`).join('')}
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block mb-2 font-medium" for="filter-team" style="font-size: ${baseSize * 0.95}px; color: ${config.text_color || defaultConfig.text_color};">
+                      Filter by Team
+                    </label>
+                    <select id="filter-team" class="w-full p-3 rounded-lg border-2" style="font-size: ${baseSize * 0.9}px; border-color: ${config.primary_color || defaultConfig.primary_color};">
+                      <option value="all">All Teams</option>
+                      ${allTeams.map(team => `<option value="${team}">${team}</option>`).join('')}
+                    </select>
+                  </div>
+                </div>
+                <div id="scores-list" class="space-y-2 overflow-y-auto" style="max-height: 500px;">
+                  ${renderScoresList(allScores, config, baseSize)}
+                </div>
+              </div>
+            </div>
+
+            <button onclick="navigateToHome()" class="px-8 py-4 rounded-lg font-semibold" style="background: ${config.button_color || defaultConfig.button_color}; color: white; font-size: ${baseSize * 1.1}px; min-height: 56px;">
+              ← Back to Home
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function attachEventListeners() {
+      const scoreForm = document.getElementById('scoreForm');
+      if (scoreForm) {
+        scoreForm.addEventListener('submit', handleScoreSubmit);
+        
+        const roundSelect = document.getElementById('round-select');
+        
+        if (roundSelect) {
+          roundSelect.addEventListener('change', updateAllianceDisplay);
+          updateAllianceDisplay();
+        }
+      }
+
+      const authForm = document.getElementById('authForm');
+      if (authForm) {
+        authForm.addEventListener('submit', handleAuth);
+      }
+
+      const filterGame = document.getElementById('filter-game');
+      const filterTeam = document.getElementById('filter-team');
+      if (filterGame && filterTeam) {
+        const updateScoresList = () => {
+          const config = window.elementSdk?.config || defaultConfig;
+          const baseSize = config.font_size || defaultConfig.font_size;
+          const scoresList = document.getElementById('scores-list');
+          if (scoresList) {
+            scoresList.innerHTML = renderScoresList(allScores, config, baseSize, filterGame.value, filterTeam.value);
+          }
+        };
+        
+        filterGame.addEventListener('change', updateScoresList);
+        filterTeam.addEventListener('change', updateScoresList);
+      }
+
+      // Calculator functionality for Block Stack games
+      const calcBase = document.getElementById('calc-base');
+      const calcTier2 = document.getElementById('calc-tier2');
+      const calcTier3 = document.getElementById('calc-tier3');
+      
+      // Calculator functionality for Disc Drop games
+      const calcNocolor = document.getElementById('calc-nocolor');
+      const calcYellow = document.getElementById('calc-yellow');
+      const calcBlue = document.getElementById('calc-blue');
+      const calcPurple = document.getElementById('calc-purple');
+      
+      const calcResult = document.getElementById('calc-result');
+      const useCalcBtn = document.getElementById('use-calc-btn');
+
+      if (calcBase && calcTier2 && calcTier3 && calcResult) {
+        const updateCalculation = () => {
+          const base = (parseInt(calcBase.value) || 0) * 2;
+          const tier2 = (parseInt(calcTier2.value) || 0) * 5;
+          const tier3 = (parseInt(calcTier3.value) || 0) * 10;
+          const total = base + tier2 + tier3;
+          calcResult.textContent = total;
+        };
+
+        calcBase.addEventListener('input', updateCalculation);
+        calcTier2.addEventListener('input', updateCalculation);
+        calcTier3.addEventListener('input', updateCalculation);
+
+        if (useCalcBtn) {
+          useCalcBtn.addEventListener('click', () => {
+            const scoreInput = document.getElementById('score-input');
+            if (scoreInput) {
+              scoreInput.value = calcResult.textContent;
+            }
+          });
+        }
+
+        updateCalculation();
+      }
+
+      if (calcNocolor && calcBlue && calcYellow && calcPurple && calcResult) {
+        const updateCalculation = () => {
+          const nocolor = (parseInt(calcNocolor.value) || 0) * 1;
+          const blue = (parseInt(calcBlue.value) || 0) * 2;
+          const yellow = (parseInt(calcYellow.value) || 0) * 3;
+          const purple = (parseInt(calcPurple.value) || 0) * 4;
+          const total = nocolor + blue + yellow + purple;
+          calcResult.textContent = total;
+        };
+
+        calcNocolor.addEventListener('input', updateCalculation);
+        calcBlue.addEventListener('input', updateCalculation);
+        calcYellow.addEventListener('input', updateCalculation);
+        calcPurple.addEventListener('input', updateCalculation);
+
+        if (useCalcBtn) {
+          useCalcBtn.addEventListener('click', () => {
+            const scoreInput = document.getElementById('score-input');
+            if (scoreInput) {
+              scoreInput.value = calcResult.textContent;
+            }
+          });
+        }
+
+        updateCalculation();
+      }
+    }
+
+    function updateAllianceDisplay() {
+      const roundSelect = document.getElementById('round-select');
+      const allianceTeams = document.getElementById('alliance-teams');
+      
+      if (!roundSelect || !allianceTeams) return;
+      
+      const gameSchedule = schedule[currentPage] || [];
+      const selectedRound = parseInt(roundSelect.value);
+      const roundData = gameSchedule.find(r => r.round === selectedRound);
+      
+      if (roundData) {
+        if (roundData.team2) {
+          allianceTeams.textContent = `${roundData.team1} + ${roundData.team2}`;
+        } else {
+          allianceTeams.textContent = roundData.team1;
+        }
+      }
+    }
+
+    async function handleScoreSubmit(e) {
+      e.preventDefault();
+      
+      if (allScores.length >= 997) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'mt-4 p-3 rounded-lg';
+        errorDiv.style.cssText = 'background: #fee2e2; color: #991b1b;';
+        errorDiv.textContent = 'Maximum limit reached. Please delete some scores first.';
+        e.target.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 5000);
+        return;
+      }
+
+      const submitBtn = document.getElementById('submit-btn');
+      const originalText = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<div class="loading-spinner mx-auto"></div>';
+
+      const roundSelect = document.getElementById('round-select');
+      const scoreInput = document.getElementById('score-input');
+      const gameSchedule = schedule[currentPage] || [];
+      
+      const selectedRound = parseInt(roundSelect.value);
+      const roundData = gameSchedule.find(r => r.round === selectedRound);
+      
+      if (!roundData) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+        return;
+      }
+      
+      const score = parseInt(scoreInput.value);
+      const timestamp = new Date().toISOString();
+      
+      const result1 = await window.dataSdk.create({
+        game_name: currentPage,
+        round_number: selectedRound,
+        team_name: roundData.team1,
+        score: score,
+        timestamp: timestamp
+      });
+
+      let result2 = { isOk: true };
+      if (roundData.team2) {
+        result2 = await window.dataSdk.create({
+          game_name: currentPage,
+          round_number: selectedRound,
+          team_name: roundData.team2,
+          score: score,
+          timestamp: timestamp
+        });
+      }
+
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+
+      if (result1.isOk && result2.isOk) {
+        scoreInput.value = '';
+        
+        // Reset calculator fields if they exist
+        const calcNocolor = document.getElementById('calc-nocolor');
+        const calcYellow = document.getElementById('calc-yellow');
+        const calcBlue = document.getElementById('calc-blue');
+        const calcPurple = document.getElementById('calc-purple');
+        if (calcNocolor) calcNocolor.value = '0';
+        if (calcBlue) calcBlue.value = '0';
+        if (calcYellow) calcYellow.value = '0';
+        if (calcPurple) calcPurple.value = '0';
+        
+        const calcResult = document.getElementById('calc-result');
+        if (calcResult) calcResult.textContent = '0';
+      } else {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'mt-4 p-3 rounded-lg';
+        errorDiv.style.cssText = 'background: #fee2e2; color: #991b1b;';
+        errorDiv.textContent = 'Failed to save score. Please try again.';
+        e.target.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 5000);
+      }
+    }
+
+    async function updateScore(backendId) {
+      const score = allScores.find(s => s.__backendId === backendId);
+      if (!score) return;
+
+      const input = document.querySelector(`.score-edit-input[data-id="${backendId}"]`);
+      if (!input) return;
+
+      const newScore = parseInt(input.value);
+      if (isNaN(newScore) || newScore < 0) {
+        return;
+      }
+
+      const updatedScore = { ...score, score: newScore };
+      const result = await window.dataSdk.update(updatedScore);
+      
+      if (!result.isOk) {
+        console.error('Failed to update score');
+      }
+    }
+
+    async function confirmDeleteScore(backendId) {
+      const scoreItem = document.querySelector(`.score-item[data-id="${backendId}"]`);
+      if (!scoreItem) return;
+
+      const config = window.elementSdk?.config || defaultConfig;
+      const baseSize = config.font_size || defaultConfig.font_size;
+
+      scoreItem.innerHTML = `
+        <div class="flex justify-between items-center">
+          <p class="font-semibold" style="font-size: ${baseSize * 0.95}px; color: #dc2626;">
+            Delete this score?
+          </p>
+          <div class="flex gap-2">
+            <button onclick="deleteScore('${backendId}')" class="px-4 py-2 rounded font-medium" style="background: #ef4444; color: white; font-size: ${baseSize * 0.85}px;">
+              Confirm Delete
+            </button>
+            <button onclick="renderCurrentPage()" class="px-4 py-2 rounded font-medium" style="background: #6b7280; color: white; font-size: ${baseSize * 0.85}px;">
+              Cancel
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function deleteScore(backendId) {
+      const score = allScores.find(s => s.__backendId === backendId);
+      if (!score) return;
+
+      const result = await window.dataSdk.delete(score);
+      if (!result.isOk) {
+        console.error('Failed to delete score');
+      }
+    }
+
+    function handleAuth(e) {
+      e.preventDefault();
+      const config = window.elementSdk?.config || defaultConfig;
+      const passwordInput = document.getElementById('password-input');
+      const errorDiv = document.getElementById('auth-error');
+      
+      const correctPassword = config.totals_password || defaultConfig.totals_password;
+      
+      if (passwordInput.value === correctPassword) {
+        isAuthenticated = true;
+        renderCurrentPage();
+      } else {
+        errorDiv.textContent = 'Incorrect password. Please try again.';
+        errorDiv.classList.remove('hidden');
+        passwordInput.value = '';
+        setTimeout(() => errorDiv.classList.add('hidden'), 3000);
+      }
+    }
+
+    function navigateToHome() {
+      currentPage = 'home';
+      renderCurrentPage();
+    }
+
+    function navigateToGame(gameName) {
+      currentPage = gameName;
+      renderCurrentPage();
+    }
+
+    function navigateToTotals() {
+      currentPage = 'totals';
+      renderCurrentPage();
+    }
+
+    function logout() {
+      isAuthenticated = false;
+      renderCurrentPage();
+    }
+
+    function confirmReset() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const baseSize = config.font_size || defaultConfig.font_size;
+      
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;';
+      
+      overlay.innerHTML = `
+        <div class="p-8 rounded-xl shadow-2xl max-w-md" style="background: ${config.secondary_color || defaultConfig.secondary_color};">
+          <h3 class="font-bold mb-4" style="font-size: ${baseSize * 1.5}px; color: ${config.text_color || defaultConfig.text_color};">
+            ⚠️ Reset All Scores?
+          </h3>
+          <p class="mb-6" style="font-size: ${baseSize}px; color: #6b7280;">
+            This will permanently delete all ${allScores.length} scores from all games and teams. This action cannot be undone.
+          </p>
+          <div class="flex gap-3 justify-end">
+            <button id="cancel-reset" class="px-5 py-3 rounded-lg font-medium" style="background: #6b7280; color: white; font-size: ${baseSize}px;">
+              Cancel
+            </button>
+            <button id="confirm-reset" class="px-5 py-3 rounded-lg font-medium" style="background: #ef4444; color: white; font-size: ${baseSize}px;">
+              Yes, Delete Everything
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(overlay);
+      
+      document.getElementById('cancel-reset').addEventListener('click', () => {
+        overlay.remove();
+      });
+      
+      document.getElementById('confirm-reset').addEventListener('click', async () => {
+        await resetAllScores();
+        overlay.remove();
+      });
+    }
+
+    async function resetAllScores() {
+      const deletePromises = allScores.map(score => window.dataSdk.delete(score));
+      await Promise.all(deletePromises);
+    }
+
+    async function onConfigChange(config) {
+      renderCurrentPage();
+    }
+
+    window.elementSdk?.init({
+      defaultConfig,
+      onConfigChange,
+      mapToCapabilities: (config) => ({
+        recolorables: [
+          {
+            get: () => config.primary_color || defaultConfig.primary_color,
+            set: (value) => {
+              config.primary_color = value;
+              window.elementSdk.setConfig({ primary_color: value });
+            }
+          },
+          {
+            get: () => config.secondary_color || defaultConfig.secondary_color,
+            set: (value) => {
+              config.secondary_color = value;
+              window.elementSdk.setConfig({ secondary_color: value });
+            }
+          },
+          {
+            get: () => config.text_color || defaultConfig.text_color,
+            set: (value) => {
+              config.text_color = value;
+              window.elementSdk.setConfig({ text_color: value });
+            }
+          },
+          {
+            get: () => config.accent_color || defaultConfig.accent_color,
+            set: (value) => {
+              config.accent_color = value;
+              window.elementSdk.setConfig({ accent_color: value });
+            }
+          },
+          {
+            get: () => config.button_color || defaultConfig.button_color,
+            set: (value) => {
+              config.button_color = value;
+              window.elementSdk.setConfig({ button_color: value });
+            }
+          }
+        ],
+        borderables: [],
+        fontEditable: {
+          get: () => config.font_family || defaultConfig.font_family,
+          set: (value) => {
+            config.font_family = value;
+            window.elementSdk.setConfig({ font_family: value });
+          }
+        },
+        fontSizeable: {
+          get: () => config.font_size || defaultConfig.font_size,
+          set: (value) => {
+            config.font_size = value;
+            window.elementSdk.setConfig({ font_size: value });
+          }
+        }
+      }),
+      mapToEditPanelValues: (config) => new Map([
+        ["app_title", config.app_title || defaultConfig.app_title],
+        ["totals_password", config.totals_password || defaultConfig.totals_password]
+      ])
+    });
+
+    initApp();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9c4a3792a36810cd',t:'MTc2OTUzNzUzNC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
